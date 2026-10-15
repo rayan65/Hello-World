@@ -1,8 +1,5 @@
-// ============================================================
-// SETTING: put your Worker's URL here (no trailing slash).
-// Example: "https://shared-clipboard.yourname.workers.dev"
-// ============================================================
-const API_URL = "https://shared-clipboard.YOUR-SUBDOMAIN.workers.dev";
+// The API is served by the same Worker as this page, so it uses a relative URL.
+const API_URL = "/api/text";
 
 // The password is never stored in this file. After you type it, it is kept
 // in this browser only (so you don't have to retype it). The saved text
@@ -80,12 +77,9 @@ function showScreen(loggedIn) {
 }
 
 async function api(method, body) {
-  if (API_URL.includes("YOUR-SUBDOMAIN")) {
-    throw new Error("Setup needed: set API_URL at the top of script.js to your Worker URL.");
-  }
   let res;
   try {
-    res = await fetch(API_URL + "/api/text", {
+    res = await fetch(API_URL, {
       method,
       cache: "no-store",
       headers: {

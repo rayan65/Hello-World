@@ -1,0 +1,12 @@
+{
+  "name": "shared-clipboard",
+  "private": true,
+  "description": "Password-protected cross-device text clipboard on Cloudflare Workers",
+  "cloudflare": {
+    "bindings": {
+      "PASSWORD": {
+        "description": "The password you will type on the website to read or save text. Choose a **long** one, for example 4–5 random words. It is stored as an encrypted Cloudflare secret."
+      }
+    }
+  }
+}

@@ -8,10 +8,12 @@
  * consistent storage, so "check version, then write" is atomic and every
  * device sees a save immediately. Durable Objects are on the Workers Free plan.
  *
- * Bindings (set by wrangler.toml / deploy.sh):
+ * The same Worker also serves the website (public/) as static assets, so the
+ * page and API share one origin and no CORS is needed (or allowed).
+ *
+ * Bindings (see wrangler.toml):
  *   CLIP             Durable Object namespace → class Clipboard
  *   PASSWORD         Secret — the password you type on the website
- *   ALLOWED_ORIGIN   Your Pages URL, e.g. https://my-clipboard.pages.dev
  *
  * Routes:
  *   GET  /api/text   → { text, updated, version }
@@ -49,32 +51,26 @@ export class Clipboard extends DurableObject {
 
 export default {
   async fetch(request, env) {
-    const cors = corsHeaders(env);
-
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: cors });
-    }
-
     const url = new URL(request.url);
     if (url.pathname !== "/api/text") {
-      return json({ error: "Not found" }, 404, cors);
+      return json({ error: "Not found" }, 404);
     }
 
     if (!env.CLIP || !env.PASSWORD) {
-      return json({ error: "Server not configured: missing storage binding or PASSWORD secret." }, 500, cors);
+      return json({ error: "Server not configured: missing storage binding or PASSWORD secret." }, 500);
     }
 
     if (!(await isAuthorized(request, env.PASSWORD))) {
       // Small delay makes password guessing slower.
       await new Promise((r) => setTimeout(r, 1000));
-      return json({ error: "Wrong password." }, 401, cors);
+      return json({ error: "Wrong password." }, 401);
     }
 
     const store = env.CLIP.get(env.CLIP.idFromName("main"));
 
     try {
       if (request.method === "GET") {
-        return json(await store.read(), 200, cors);
+        return json(await store.read(), 200);
       }
 
       if (request.method === "PUT") {
@@ -82,13 +78,13 @@ export default {
         try {
           body = await request.json();
         } catch {
-          return json({ error: "Invalid JSON body." }, 400, cors);
+          return json({ error: "Invalid JSON body." }, 400);
         }
         if (typeof body.text !== "string") {
-          return json({ error: "Missing 'text'." }, 400, cors);
+          return json({ error: "Missing 'text'." }, 400);
         }
         if (new TextEncoder().encode(body.text).length > MAX_BYTES) {
-          return json({ error: "Text too large (max 1 MB)." }, 413, cors);
+          return json({ error: "Text too large (max 1 MB)." }, 413);
         }
         const baseVersion = Number.isInteger(body.baseVersion) ? body.baseVersion : 0;
 
@@ -96,16 +92,15 @@ export default {
         if (result.conflict) {
           return json(
             { error: "conflict", message: "The text was changed on another device.", current: result.current },
-            409,
-            cors
+            409
           );
         }
-        return json(result, 200, cors);
+        return json(result, 200);
       }
 
-      return json({ error: "Method not allowed" }, 405, cors);
+      return json({ error: "Method not allowed" }, 405);
     } catch (err) {
-      return json({ error: "Server error: " + (err && err.message ? err.message : err) }, 500, cors);
+      return json({ error: "Server error: " + (err && err.message ? err.message : err) }, 500);
     }
   },
 };
@@ -126,21 +121,10 @@ async function isAuthorized(request, password) {
   return diff === 0 && given.length > 0;
 }
 
-function corsHeaders(env) {
-  return {
-    "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN || "*",
-    "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization, Content-Type",
-    "Access-Control-Max-Age": "86400",
-    Vary: "Origin",
-  };
-}
-
-function json(data, status, headers) {
+function json(data, status) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
-      ...headers,
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
     },

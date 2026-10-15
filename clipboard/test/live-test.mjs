@@ -1,13 +1,13 @@
 // End-to-end test against the LIVE deployment.
-// Usage: CLIPBOARD_PASSWORD=... node test/live-test.mjs <PAGES_URL> <WORKER_URL>
+// Usage: CLIPBOARD_PASSWORD=... node test/live-test.mjs <SITE_URL>
 // Note: overwrites the stored clipboard text (it is emptied at the end).
 import { createRequire } from "module";
 import { execSync } from "child_process";
 
-const [PAGES_URL, WORKER_URL] = process.argv.slice(2);
+const SITE_URL = (process.argv[2] || "").replace(/\/$/, "");
 const PW = process.env.CLIPBOARD_PASSWORD;
-if (!PAGES_URL || !WORKER_URL || !PW) {
-  console.error("Usage: CLIPBOARD_PASSWORD=... node test/live-test.mjs <PAGES_URL> <WORKER_URL>");
+if (!SITE_URL || !PW) {
+  console.error("Usage: CLIPBOARD_PASSWORD=... node test/live-test.mjs <SITE_URL>");
   process.exit(2);
 }
 const require = createRequire(import.meta.url);
@@ -19,25 +19,30 @@ const check = (name, cond, extra = "") => {
   console.log(`${cond ? "PASS" : "FAIL"}  ${name}${extra ? "  — " + extra : ""}`);
   if (!cond) failures++;
 };
-const api = async (method, body, password = PW, origin = PAGES_URL) => {
-  const res = await fetch(WORKER_URL + "/api/text", {
+const api = async (method, body, password = PW) => {
+  const res = await fetch(SITE_URL + "/api/text", {
     method,
-    headers: { Authorization: "Bearer " + password, "Content-Type": "application/json", Origin: origin },
+    headers: { Authorization: "Bearer " + password, "Content-Type": "application/json" },
     body: body && JSON.stringify(body),
   });
   return { status: res.status, headers: res.headers, data: await res.json().catch(() => ({})) };
 };
 
 // ---- API level ----
-check("HTTPS website", PAGES_URL.startsWith("https://"));
-check("HTTPS API", WORKER_URL.startsWith("https://"));
+check("HTTPS", SITE_URL.startsWith("https://"));
+if (SITE_URL.startsWith("https://")) {
+  const plain = await fetch(SITE_URL.replace("https://", "http://"), { redirect: "manual" }).catch(() => null);
+  check("HTTP redirects to HTTPS", !plain || [301, 302, 307, 308].includes(plain.status), plain && String(plain.status));
+}
+const page = await fetch(SITE_URL + "/");
+check("Website loads", page.status === 200 && (await page.text()).includes("Shared Clipboard"));
+check("Security headers on page", /default-src 'self'/.test(page.headers.get("content-security-policy") || ""));
 check("No password rejected", (await api("GET", null, "")).status === 401);
 check("Wrong password rejected", (await api("GET", null, "wrong-" + Date.now())).status === 401);
 check("Wrong password cannot write", (await api("PUT", { text: "x", force: true }, "wrong")).status === 401);
 const g0 = await api("GET");
 check("Correct password reads", g0.status === 200, `version ${g0.data.version}`);
-check("CORS locked to Pages origin", g0.headers.get("access-control-allow-origin") === PAGES_URL,
-  g0.headers.get("access-control-allow-origin"));
+check("No cross-origin access (no CORS header)", !g0.headers.get("access-control-allow-origin"));
 
 const base = g0.data.version;
 const race = await Promise.all(Array.from({ length: 10 }, (_, i) => api("PUT", { text: "race " + i, baseVersion: base })));
@@ -53,7 +58,7 @@ const dialogs = [];
 for (const p of [A, B]) p.on("dialog", (d) => { dialogs.push(d.message()); d.accept(); });
 
 const unlock = async (p) => {
-  await p.goto(PAGES_URL, { waitUntil: "networkidle" });
+  await p.goto(SITE_URL, { waitUntil: "networkidle" });
   await p.fill("#password", PW);
   await p.click("button[type=submit]");
   await p.waitForSelector("#app:not(.hidden)");
@@ -62,7 +67,7 @@ const unlock = async (p) => {
 const waitMsg = (p) => p.waitForFunction(() => document.querySelector("#message").textContent.length > 0);
 
 const wrongP = await mac.newPage();
-await wrongP.goto(PAGES_URL);
+await wrongP.goto(SITE_URL);
 await wrongP.fill("#password", "definitely-wrong");
 await wrongP.click("button[type=submit]");
 await wrongP.waitForFunction(() => /Wrong password/.test(document.querySelector("#message").textContent), null, { timeout: 15000 });

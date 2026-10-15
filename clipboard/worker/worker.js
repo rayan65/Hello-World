@@ -1,21 +1,51 @@
 /**
- * Shared Clipboard — Cloudflare Worker (API)
+ * Shared Clipboard — Cloudflare Worker (API) + Durable Object storage
  *
- * Bindings (configure in the Cloudflare dashboard → Worker → Settings):
- *   CLIPBOARD        KV namespace binding (required)
- *   PASSWORD         Secret — the password you type on the website (required)
- *   ALLOWED_ORIGIN   Plain-text variable — your Pages URL, e.g.
- *                    https://my-clipboard.pages.dev (optional; defaults to "*")
+ * Why a Durable Object instead of KV: KV is eventually consistent (other
+ * locations can read data up to ~60 s old) and has no atomic compare-and-swap,
+ * so two devices saving close together could silently overwrite each other.
+ * A single Durable Object processes requests one at a time with strongly
+ * consistent storage, so "check version, then write" is atomic and every
+ * device sees a save immediately. Durable Objects are on the Workers Free plan.
+ *
+ * Bindings (set by wrangler.toml / deploy.sh):
+ *   CLIP             Durable Object namespace → class Clipboard
+ *   PASSWORD         Secret — the password you type on the website
+ *   ALLOWED_ORIGIN   Your Pages URL, e.g. https://my-clipboard.pages.dev
  *
  * Routes:
  *   GET  /api/text   → { text, updated, version }
  *   PUT  /api/text   ← { text, baseVersion, force }  → { ok, updated, version }
+ *                    → 409 { error: "conflict", current } if baseVersion is stale
  *
  * Every request must send:  Authorization: Bearer <password>
  */
 
-const KEY = "clipboard";
-const MAX_CHARS = 1_000_000; // ~1 MB of text is plenty for a clipboard
+import { DurableObject } from "cloudflare:workers";
+
+const MAX_BYTES = 1_000_000; // 1 MB of UTF-8 text
+
+// ---------- storage: one Durable Object instance holds the one entry ----------
+
+export class Clipboard extends DurableObject {
+  async read() {
+    return (await this.ctx.storage.get("entry")) || { text: "", updated: null, version: 0 };
+  }
+
+  // Runs atomically: a Durable Object never interleaves other requests
+  // between these storage operations (input/output gates).
+  async write(text, baseVersion, force) {
+    const current = await this.read();
+    if (!force && current.version !== baseVersion) {
+      return { conflict: true, current };
+    }
+    const entry = { text, updated: new Date().toISOString(), version: current.version + 1 };
+    await this.ctx.storage.put("entry", entry);
+    return { ok: true, updated: entry.updated, version: entry.version };
+  }
+}
+
+// ---------- HTTP API ----------
 
 export default {
   async fetch(request, env) {
@@ -30,8 +60,8 @@ export default {
       return json({ error: "Not found" }, 404, cors);
     }
 
-    if (!env.CLIPBOARD || !env.PASSWORD) {
-      return json({ error: "Server not configured: missing KV binding or PASSWORD secret." }, 500, cors);
+    if (!env.CLIP || !env.PASSWORD) {
+      return json({ error: "Server not configured: missing storage binding or PASSWORD secret." }, 500, cors);
     }
 
     if (!(await isAuthorized(request, env.PASSWORD))) {
@@ -40,10 +70,11 @@ export default {
       return json({ error: "Wrong password." }, 401, cors);
     }
 
+    const store = env.CLIP.get(env.CLIP.idFromName("main"));
+
     try {
       if (request.method === "GET") {
-        const data = await readEntry(env);
-        return json(data, 200, cors);
+        return json(await store.read(), 200, cors);
       }
 
       if (request.method === "PUT") {
@@ -56,28 +87,20 @@ export default {
         if (typeof body.text !== "string") {
           return json({ error: "Missing 'text'." }, 400, cors);
         }
-        if (body.text.length > MAX_CHARS) {
-          return json({ error: "Text too large (max 1,000,000 characters)." }, 413, cors);
+        if (new TextEncoder().encode(body.text).length > MAX_BYTES) {
+          return json({ error: "Text too large (max 1 MB)." }, 413, cors);
         }
+        const baseVersion = Number.isInteger(body.baseVersion) ? body.baseVersion : 0;
 
-        // Overwrite protection: reject if someone else saved since this
-        // device last loaded, unless the client explicitly forces it.
-        const current = await readEntry(env);
-        if (!body.force && current.version !== (body.baseVersion ?? 0)) {
+        const result = await store.write(body.text, baseVersion, body.force === true);
+        if (result.conflict) {
           return json(
-            { error: "conflict", message: "The text was changed on another device.", current },
+            { error: "conflict", message: "The text was changed on another device.", current: result.current },
             409,
             cors
           );
         }
-
-        const entry = {
-          text: body.text,
-          updated: new Date().toISOString(),
-          version: current.version + 1,
-        };
-        await env.CLIPBOARD.put(KEY, JSON.stringify(entry));
-        return json({ ok: true, updated: entry.updated, version: entry.version }, 200, cors);
+        return json(result, 200, cors);
       }
 
       return json({ error: "Method not allowed" }, 405, cors);
@@ -86,17 +109,6 @@ export default {
     }
   },
 };
-
-async function readEntry(env) {
-  const raw = await env.CLIPBOARD.get(KEY);
-  if (!raw) return { text: "", updated: null, version: 0 };
-  try {
-    const d = JSON.parse(raw);
-    return { text: d.text ?? "", updated: d.updated ?? null, version: d.version ?? 0 };
-  } catch {
-    return { text: raw, updated: null, version: 0 };
-  }
-}
 
 async function isAuthorized(request, password) {
   const header = request.headers.get("Authorization") || "";
@@ -115,9 +127,8 @@ async function isAuthorized(request, password) {
 }
 
 function corsHeaders(env) {
-  const allowed = env.ALLOWED_ORIGIN || "*";
   return {
-    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN || "*",
     "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Max-Age": "86400",

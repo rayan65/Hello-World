@@ -6,7 +6,7 @@ const API_URL = "https://shared-clipboard.YOUR-SUBDOMAIN.workers.dev";
 
 // The password is never stored in this file. After you type it, it is kept
 // in this browser only (so you don't have to retype it). The saved text
-// itself lives on the server in Cloudflare KV, not in the browser.
+// itself lives on the server (Cloudflare Durable Object), not in the browser.
 const PW_KEY = "clipboard-password";
 
 const $ = (id) => document.getElementById(id);
@@ -152,7 +152,7 @@ async function save(force = false) {
     version = data.version;
     updatedEl.textContent = formatTime(data.updated);
     updateDirty();
-    showMessage("Saved. Other devices may take up to a minute to see it.");
+    showMessage("Saved. Open or refresh on your other device to see it.");
   } catch (e) {
     if (e.status === 409) {
       const when = e.current && e.current.updated ? formatTime(e.current.updated) : "recently";

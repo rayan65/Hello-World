@@ -2,11 +2,11 @@
 
 A small, password-protected online clipboard. Paste text on one device, tap **Save**, and open the same URL on any other device to read and copy it. It works in both directions, and none of your devices has to stay on.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/rayan65/Hello-World/tree/claude/cross-device-text-clipboard-hsn7gh/clipboard)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/rayan65/Hello-World/tree/master/clipboard)
 
 ```
 iPhone / Mac / any browser
-        │  HTTPS (one URL: https://shared-clipboard.<you>.workers.dev)
+        │  HTTPS (one URL: https://hello-world.<you>.workers.dev)
         ▼
 Cloudflare Worker
    ├─ public/             website (index.html, style.css, script.js), served as static assets
@@ -31,15 +31,15 @@ The deploy flow:
 - creates the Worker and its Durable Object storage,
 - stores the password as an encrypted secret,
 - deploys the Worker, and
-- shows the public URL: `https://shared-clipboard.<your-subdomain>.workers.dev`.
+- shows the public URL: `https://hello-world.<your-subdomain>.workers.dev`.
 
-**If the button can't find the code** (for example, because the branch name contains `/`), use the dashboard instead:
+**Or use the dashboard** (this is how the current `hello-world` Worker is set up):
 
 1. Go to **Workers & Pages → Create application → Import a repository**.
 2. Choose `rayan65/Hello-World`.
-3. Set **Branch** to `claude/cross-device-text-clipboard-hsn7gh`.
+3. Set **Branch** to `master`.
 4. Set **Root directory** to `clipboard`.
-5. Set **Project name** to `shared-clipboard` (it must match `name` in `wrangler.toml`).
+5. Set **Project name** to `hello-world` (it must match `name` in `wrangler.toml`).
 6. Tap **Deploy**.
 7. Add the password in **Settings → Variables and Secrets**: **Add**, set **Type** to **Secret**, **Name** to `PASSWORD`, then **Deploy**.
 
@@ -116,7 +116,7 @@ Other safeguards:
 ## Testing the live site
 
 ```bash
-CLIPBOARD_PASSWORD=... node test/live-test.mjs https://shared-clipboard.<you>.workers.dev
+CLIPBOARD_PASSWORD=... node test/live-test.mjs https://hello-world.<you>.workers.dev
 ```
 
 The test checks:

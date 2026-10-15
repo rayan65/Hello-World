@@ -1,4 +1,4 @@
-name = "shared-clipboard"
+name = "hello-world"   # must match the Worker name in the Cloudflare dashboard
 main = "worker/worker.js"
 compatibility_date = "2025-09-01"
 workers_dev = true

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1f6feb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Clipboard">
+  <title>Shared Clipboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Shared Clipboard</h1>
+      <button id="logoutBtn" class="link hidden" type="button">Lock</button>
+    </header>
+
+    <!-- Password screen -->
+    <form id="loginForm" class="card hidden" autocomplete="on">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <label class="check">
+        <input id="remember" type="checkbox" checked> Remember on this device
+      </label>
+      <button type="submit" class="primary">Unlock</button>
+    </form>
+
+    <!-- Clipboard screen -->
+    <section id="app" class="hidden">
+      <textarea id="text" placeholder="Paste or type text here…" spellcheck="false"
+                autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+
+      <div class="buttons">
+        <button id="saveBtn" class="primary" type="button">Save</button>
+        <button id="copyBtn" type="button">Copy</button>
+        <button id="refreshBtn" type="button">Refresh</button>
+        <button id="clearBtn" class="danger" type="button">Clear</button>
+      </div>
+
+      <p class="meta">
+        Last updated: <span id="updated">—</span>
+        <span id="dirty" class="hidden"> · unsaved changes</span>
+      </p>
+    </section>
+
+    <p id="message" role="status" aria-live="polite"></p>
+
+    <p class="note">
+      Saves are available on all your devices immediately. Other open devices
+      update when you switch back to the page or tap Refresh.
+    </p>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

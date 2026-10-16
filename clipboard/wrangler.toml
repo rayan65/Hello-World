@@ -1,0 +1,21 @@
+name = "hello-world"   # must match the Worker name in the Cloudflare dashboard
+main = "worker/worker.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+# The website (index.html, style.css, script.js) is served from public/.
+# Requests that don't match a file (i.e. /api/text) go to the Worker.
+[assets]
+directory = "public"
+
+# Storage: one strongly consistent Durable Object (free plan, SQLite-backed).
+[[durable_objects.bindings]]
+name = "CLIP"
+class_name = "Clipboard"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Clipboard"]
+
+# PASSWORD is a secret: entered in the Cloudflare deploy form or dashboard,
+# never stored in this repository.

@@ -1,0 +1,4 @@
+.wrangler/
+.dev.vars
+*.png
+node_modules/

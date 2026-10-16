@@ -23,3 +23,10 @@ new_sqlite_classes = ["Clipboard"]
 # fail loudly, instead of going live without it, if it has not been set.
 [secrets]
 required = ["PASSWORD"]
+
+# If PASSWORD is stored as a *build* secret (Settings > Build > Variables and
+# secrets), copy it into the Worker's *runtime* secret during production deploys
+# on Cloudflare Workers Builds. The value is piped via stdin and never printed.
+# Does nothing locally, in preview builds, or when no build secret is set.
+[build]
+command = 'if [ "$WORKERS_CI" = "1" ] && [ "$WRANGLER_COMMAND" = "deploy" ] && [ -n "$PASSWORD" ]; then printf "%s" "$PASSWORD" | npx wrangler secret put PASSWORD; fi'

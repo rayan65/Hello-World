@@ -9,7 +9,8 @@ Findings from an access review on 2026-10-16. The site is
 |---|---|---|
 | Google Safe Browsing | "No unsafe content found" (updated 2026-10-16) | ✅ Verified |
 | HSTS preload list | `workers.dev` is covered by the `.dev` preload, so browsers only connect over HTTPS | ✅ Verified |
-| securityheaders.com | Grade **A** before this change. Permissions-Policy has since been added. | ✅ Verified |
+| securityheaders.com | **A+** for the page and the API (was A for the page, B for the API) | ✅ Verified |
+| Qualys SSL Labs | **B**: valid trusted certificate, TLS 1.3 with post-quantum key exchange, forward secrecy, no known vulnerabilities. Capped at B only because the shared `workers.dev` edge still accepts TLS 1.0/1.1, a Cloudflare setting you can't change on `workers.dev` | ✅ Verified |
 | Fortinet FortiGuard | The public lookup returned HTTP 403 to automated access | ⚠️ Not verified |
 | Broadcom/Symantec Site Review | Blocked by a CAPTCHA | ⚠️ Not verified |
 | Cisco Talos | The lookup did not complete (bot challenge) | ⚠️ Not verified |
@@ -55,6 +56,7 @@ The legitimate route is to ask your IT or security team for an exception, or to 
 **Helps:**
 - Removes the shared-`workers.dev` reputation problem, so the site gets its own reputation.
 - Easier for IT to allow-list a single host.
+- On a custom domain you control **Minimum TLS Version** (SSL/TLS → Edge Certificates, free plan). Setting it to 1.2 removes TLS 1.0/1.1, the only reason SSL Labs gives B.
 - Looks more trustworthy.
 
 **Doesn't help:**
@@ -65,7 +67,7 @@ The legitimate route is to ask your IT or security team for an exception, or to 
 - About **$10–15/year**, e.g. a `.com` at cost through Cloudflare Registrar. Not purchased.
 - Setup is a few dashboard steps: register or move DNS to Cloudflare, then add a *Custom Domain* to the `hello-world` Worker. Cloudflare issues the certificate automatically. No code change is needed, because the app uses relative URLs and same-origin auth.
 
-**Verdict:** worth it only if you need IT to allow-list it, or if you see blocks specifically because of `workers.dev`. It won't get the site past deliberate personal-storage or DLP policies, and it shouldn't.
+**Verdict:** worth it only if you need IT to allow-list it, need a TLS 1.2+ minimum, or see blocks specifically because of `workers.dev`. It won't get the site past deliberate personal-storage or DLP policies, and it shouldn't.
 
 ## Recategorization requests (drafts, not submitted)
 

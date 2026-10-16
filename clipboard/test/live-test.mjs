@@ -40,6 +40,8 @@ check("Security headers on page", /default-src 'self'/.test(page.headers.get("co
 check("No password rejected", (await api("GET", null, "")).status === 401);
 check("Wrong password rejected", (await api("GET", null, "wrong-" + Date.now())).status === 401);
 check("Wrong password cannot write", (await api("PUT", { text: "x", force: true }, "wrong")).status === 401);
+const histAnon = await fetch(SITE_URL + "/api/history");
+check("History requires password", histAnon.status === 401);
 const g0 = await api("GET");
 check("Correct password reads", g0.status === 200, `version ${g0.data.version}`);
 check("No cross-origin access (no CORS header)", !g0.headers.get("access-control-allow-origin"));

@@ -1,4 +1,6 @@
 .wrangler/
 .dev.vars
+# test screenshots (website images in public/ are tracked)
 *.png
+!public/*.png
 node_modules/

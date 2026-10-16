@@ -56,8 +56,12 @@ export default {
       return json({ error: "Not found" }, 404);
     }
 
-    if (!env.CLIP || !env.PASSWORD) {
-      return json({ error: "Server not configured: missing storage binding or PASSWORD secret." }, 500);
+    // Name exactly what is missing (never its value) so setup problems are obvious.
+    const missing = [];
+    if (!env.CLIP) missing.push("storage binding CLIP");
+    if (!env.PASSWORD) missing.push("PASSWORD secret");
+    if (missing.length) {
+      return json({ error: "Server not configured: missing " + missing.join(" and ") + "." }, 500);
     }
 
     if (!(await isAuthorized(request, env.PASSWORD))) {

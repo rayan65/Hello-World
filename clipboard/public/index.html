@@ -46,6 +46,17 @@
 
     <p id="message" role="status" aria-live="polite"></p>
 
+    <!-- History (only shown when unlocked) -->
+    <details id="history" class="history hidden">
+      <summary>History <span id="historyCount" class="count"></span></summary>
+      <p class="history-hint">
+        Your last 10 saves, newest first. Restore puts the text in the editor;
+        tap Save to make it the current clipboard.
+      </p>
+      <p id="historyEmpty" class="history-hint hidden">No saved history yet.</p>
+      <ol id="historyList" class="history-list"></ol>
+    </details>
+
     <p class="note">
       Saves are available on all your devices immediately. Other open devices
       update when you switch back to the page or tap Refresh.

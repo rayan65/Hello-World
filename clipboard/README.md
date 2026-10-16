@@ -102,6 +102,20 @@ Other safeguards:
 - It reloads automatically when you switch back to the tab or app, unless you have unsaved edits.
 - On iPhone, use **Share → Add to Home Screen** so it opens like an app.
 
+### History
+
+Tap **History** below the buttons to see your last 10 saves, newest first, synced across all your devices. Each entry shows when it was saved, how long it is, and a preview with its formatting.
+
+- **Copy** copies that entry's exact text, including tabs, line breaks and emoji.
+- **Restore** puts it in the editor only. Nothing changes for your other devices until you tap **Save**, and that save goes through the normal conflict check.
+- An 11th save removes the oldest entry.
+- Saving empty text (**Clear** then **Save**) and re-saving unchanged text don't add entries.
+- **Clear** never touches history.
+
+History is stored in the same Durable Object as the clipboard, one key per entry, and is updated in the same transaction as each save. It needs the password like everything else (`GET /api/history`).
+
+Text saved before history existed appears as the first history entry. No data is lost when upgrading.
+
 ## Security
 
 - The password exists only as an encrypted Cloudflare secret. It isn't in git or in any website file.

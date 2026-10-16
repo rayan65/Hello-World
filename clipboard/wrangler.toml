@@ -17,5 +17,16 @@ class_name = "Clipboard"
 tag = "v1"
 new_sqlite_classes = ["Clipboard"]
 
-# PASSWORD is a secret: entered in the Cloudflare deploy form or dashboard,
-# never stored in this repository.
+# PASSWORD is a secret: entered in the Cloudflare dashboard (Worker > Settings >
+# Variables and Secrets), never stored in this repository. Declaring it as
+# required makes every deploy carry the existing secret forward ("inherit") and
+# fail loudly, instead of going live without it, if it has not been set.
+[secrets]
+required = ["PASSWORD"]
+
+# If PASSWORD is stored as a *build* secret (Settings > Build > Variables and
+# secrets), copy it into the Worker's *runtime* secret during production deploys
+# on Cloudflare Workers Builds. The value is piped via stdin and never printed.
+# Does nothing locally, in preview builds, or when no build secret is set.
+[build]
+command = 'if [ "$WORKERS_CI" = "1" ] && [ "$WRANGLER_COMMAND" = "deploy" ] && [ -n "$PASSWORD" ]; then printf "%s" "$PASSWORD" | npx wrangler secret put PASSWORD; fi'

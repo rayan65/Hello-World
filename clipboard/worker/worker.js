@@ -19,6 +19,7 @@
  *   GET  /api/text   → { text, updated, version }
  *   PUT  /api/text   ← { text, baseVersion, force }  → { ok, updated, version }
  *                    → 409 { error: "conflict", current } if baseVersion is stale
+ *   GET  /api/history → { entries: [{ text, updated, version }, ...] }  newest first, max 10
  *
  * Every request must send:  Authorization: Bearer <password>
  */
@@ -28,22 +29,62 @@ import { DurableObject } from "cloudflare:workers";
 const MAX_BYTES = 1_000_000; // 1 MB of UTF-8 text
 
 // ---------- storage: one Durable Object instance holds the one entry ----------
+//
+// Keys:
+//   "entry"          the current clipboard { text, updated, version }
+//   "hist:<version>" one key per saved entry, so each stays well under the
+//                    per-value size limit; only the newest HISTORY_LIMIT are kept.
+
+const HISTORY_LIMIT = 10;
+const histKey = (version) => "hist:" + String(version).padStart(12, "0");
 
 export class Clipboard extends DurableObject {
   async read() {
     return (await this.ctx.storage.get("entry")) || { text: "", updated: null, version: 0 };
   }
 
-  // Runs atomically: a Durable Object never interleaves other requests
-  // between these storage operations (input/output gates).
-  async write(text, baseVersion, force) {
-    const current = await this.read();
-    if (!force && current.version !== baseVersion) {
-      return { conflict: true, current };
+  // Newest first. Data saved before history existed has no "hist:" keys yet;
+  // its current entry is shown as the first history item until the next save
+  // records it for real (see write()).
+  async history() {
+    const stored = await this.ctx.storage.list({ prefix: "hist:", reverse: true, limit: HISTORY_LIMIT });
+    const entries = [...stored.values()];
+    if (entries.length === 0) {
+      const current = await this.read();
+      if (current.text) entries.push(current);
     }
-    const entry = { text, updated: new Date().toISOString(), version: current.version + 1 };
-    await this.ctx.storage.put("entry", entry);
-    return { ok: true, updated: entry.updated, version: entry.version };
+    return entries;
+  }
+
+  // Runs atomically: the transaction commits the version check, the new entry
+  // and the history update together, and a Durable Object never interleaves
+  // other requests with it.
+  async write(text, baseVersion, force) {
+    return this.ctx.storage.transaction(async (txn) => {
+      const current = (await txn.get("entry")) || { text: "", updated: null, version: 0 };
+      if (!force && current.version !== baseVersion) {
+        return { conflict: true, current };
+      }
+      const entry = { text, updated: new Date().toISOString(), version: current.version + 1 };
+      await txn.put("entry", entry);
+
+      const stored = await txn.list({ prefix: "hist:", reverse: true });
+      const history = [...stored.values()];
+      // First save after this feature shipped: keep the pre-existing text too.
+      if (history.length === 0 && current.text) {
+        await txn.put(histKey(current.version), current);
+        history.unshift(current);
+      }
+      // Empty saves (Clear + Save) and unchanged re-saves don't add history rows.
+      if (text && (history.length === 0 || history[0].text !== text)) {
+        await txn.put(histKey(entry.version), entry);
+        history.unshift(entry);
+      }
+      const expired = history.slice(HISTORY_LIMIT).map((e) => histKey(e.version));
+      if (expired.length) await txn.delete(expired);
+
+      return { ok: true, updated: entry.updated, version: entry.version };
+    });
   }
 }
 
@@ -52,12 +93,16 @@ export class Clipboard extends DurableObject {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname !== "/api/text") {
+    if (url.pathname !== "/api/text" && url.pathname !== "/api/history") {
       return json({ error: "Not found" }, 404);
     }
 
-    if (!env.CLIP || !env.PASSWORD) {
-      return json({ error: "Server not configured: missing storage binding or PASSWORD secret." }, 500);
+    // Name exactly what is missing (never its value) so setup problems are obvious.
+    const missing = [];
+    if (!env.CLIP) missing.push("storage binding CLIP");
+    if (!env.PASSWORD) missing.push("PASSWORD secret");
+    if (missing.length) {
+      return json({ error: "Server not configured: missing " + missing.join(" and ") + "." }, 500);
     }
 
     if (!(await isAuthorized(request, env.PASSWORD))) {
@@ -69,6 +114,11 @@ export default {
     const store = env.CLIP.get(env.CLIP.idFromName("main"));
 
     try {
+      if (url.pathname === "/api/history") {
+        if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
+        return json({ entries: await store.history() }, 200);
+      }
+
       if (request.method === "GET") {
         return json(await store.read(), 200);
       }

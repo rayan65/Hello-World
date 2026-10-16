@@ -11,11 +11,14 @@ const textEl = $("text");
 const msgEl = $("message");
 const updatedEl = $("updated");
 const dirtyEl = $("dirty");
+const historyEl = $("history");
+const historyListEl = $("historyList");
 const buttons = ["saveBtn", "copyBtn", "refreshBtn", "clearBtn"].map($);
 
 let version = 0;       // version of the text this device last loaded/saved
 let savedText = "";    // text as last loaded/saved, to detect unsaved edits
 let msgTimer = null;
+let historyEntries = []; // last loaded history, newest first
 
 // ---------- helpers ----------
 
@@ -74,12 +77,13 @@ function showScreen(loggedIn) {
   $("loginForm").classList.toggle("hidden", loggedIn);
   $("app").classList.toggle("hidden", !loggedIn);
   $("logoutBtn").classList.toggle("hidden", !loggedIn);
+  historyEl.classList.toggle("hidden", !loggedIn);
 }
 
-async function api(method, body) {
+async function api(method, body, url = API_URL) {
   let res;
   try {
-    res = await fetch(API_URL, {
+    res = await fetch(url, {
       method,
       cache: "no-store",
       headers: {
@@ -127,6 +131,7 @@ async function load({ quiet = false } = {}) {
   try {
     const data = await api("GET");
     applyServerData(data);
+    refreshHistoryIfOpen();
     if (!quiet) showMessage("Loaded latest text.");
     return true;
   } catch (e) {
@@ -146,6 +151,7 @@ async function save(force = false) {
     version = data.version;
     updatedEl.textContent = formatTime(data.updated);
     updateDirty();
+    refreshHistoryIfOpen();
     showMessage("Saved. Open or refresh on your other device to see it.");
   } catch (e) {
     if (e.status === 409) {
@@ -194,7 +200,110 @@ function clearText() {
   showMessage("Cleared. Tap Save to clear it on all devices too.");
 }
 
+// ---------- history ----------
+
+async function loadHistory() {
+  try {
+    const data = await api("GET", null, "/api/history");
+    historyEntries = data.entries || [];
+    renderHistory();
+  } catch (e) {
+    showMessage(e.message, "err", true);
+  }
+}
+
+function refreshHistoryIfOpen() {
+  if (historyEl.open) loadHistory();
+}
+
+// Text areas turn "\r\n" into "\n" (HTML standard), so compare editor text
+// with stored text after normalising line endings the same way.
+const sameText = (a, b) => a.replace(/\r\n?/g, "\n") === b.replace(/\r\n?/g, "\n");
+
+// Built with textContent only, so saved text is never interpreted as HTML.
+function renderHistory() {
+  historyListEl.replaceChildren();
+  $("historyCount").textContent = historyEntries.length ? "(" + historyEntries.length + ")" : "";
+  $("historyEmpty").classList.toggle("hidden", historyEntries.length > 0);
+
+  historyEntries.forEach((entry, i) => {
+    const li = document.createElement("li");
+
+    const meta = document.createElement("div");
+    meta.className = "history-meta";
+    meta.textContent = formatTime(entry.updated) + " · " + entry.text.length.toLocaleString() + " chars";
+    if (i === 0 && sameText(entry.text, savedText)) {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = "Current";
+      meta.append(" ", badge);
+    }
+
+    const preview = document.createElement("div");
+    preview.className = "history-preview";
+    preview.textContent = entry.text.slice(0, 500);
+
+    const actions = document.createElement("div");
+    actions.className = "history-actions";
+    for (const [action, label] of [["copy", "Copy"], ["restore", "Restore"]]) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = label;
+      btn.dataset.action = action;
+      btn.dataset.index = i;
+      actions.append(btn);
+    }
+
+    li.append(meta, preview, actions);
+    historyListEl.append(li);
+  });
+}
+
+async function copyHistoryEntry(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    // Fallback for older browsers: copy from a temporary off-screen text area.
+    const tmp = document.createElement("textarea");
+    tmp.value = text;
+    tmp.setAttribute("readonly", "");
+    tmp.className = "offscreen";
+    document.body.append(tmp);
+    tmp.select();
+    tmp.setSelectionRange(0, text.length);
+    const ok = document.execCommand && document.execCommand("copy");
+    tmp.remove();
+    if (!ok) return showMessage("Couldn't copy automatically. Restore it, then copy from the editor.", "err");
+  }
+  showMessage("Copied to clipboard.");
+}
+
+// Puts an old entry in the editor only. Nothing is saved until you tap Save.
+function restoreHistoryEntry(text) {
+  if (isDirty() && !sameText(textEl.value, text) &&
+      !confirm("Replace the unsaved text in the editor with this history entry?")) return;
+  textEl.value = text;
+  updateDirty();
+  textEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  showMessage(isDirty()
+    ? "Restored to the editor (not saved). Tap Save to make it the current clipboard."
+    : "This entry is already the current clipboard.");
+}
+
 // ---------- wiring ----------
+
+historyEl.addEventListener("toggle", () => {
+  if (historyEl.open) loadHistory();
+});
+
+historyListEl.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const entry = historyEntries[Number(btn.dataset.index)];
+  if (!entry) return;
+  if (btn.dataset.action === "copy") copyHistoryEntry(entry.text);
+  else restoreHistoryEntry(entry.text);
+});
 
 $("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -214,6 +323,9 @@ $("logoutBtn").addEventListener("click", () => {
   version = 0;
   updatedEl.textContent = "—";
   updateDirty();
+  historyEntries = [];
+  renderHistory();
+  historyEl.open = false;
   showScreen(false);
   showMessage("Locked.");
 });

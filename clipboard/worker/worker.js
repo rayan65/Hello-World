@@ -177,6 +177,11 @@ function json(data, status) {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
+      // Same hardening as the page (public/_headers), suited to JSON responses.
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+      "Referrer-Policy": "no-referrer",
+      "Cross-Origin-Resource-Policy": "same-origin",
     },
   });
 }

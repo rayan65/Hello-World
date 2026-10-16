@@ -75,6 +75,8 @@ input[type="password"] {
   color: var(--text);
 }
 
+.intro { margin: 0 0 4px; color: var(--muted); font-size: 0.9rem; }
+
 .check { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 
 textarea {

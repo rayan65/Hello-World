@@ -17,5 +17,9 @@ class_name = "Clipboard"
 tag = "v1"
 new_sqlite_classes = ["Clipboard"]
 
-# PASSWORD is a secret: entered in the Cloudflare deploy form or dashboard,
-# never stored in this repository.
+# PASSWORD is a secret: entered in the Cloudflare dashboard (Worker > Settings >
+# Variables and Secrets), never stored in this repository. Declaring it as
+# required makes every deploy carry the existing secret forward ("inherit") and
+# fail loudly, instead of going live without it, if it has not been set.
+[secrets]
+required = ["PASSWORD"]

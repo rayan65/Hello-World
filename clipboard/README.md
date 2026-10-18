@@ -6,7 +6,7 @@ A small, password-protected online clipboard. Paste text on one device, tap **Sa
 
 ```
 iPhone / Mac / any browser
-        │  HTTPS (one URL: https://hello-world.<you>.workers.dev)
+        │  HTTPS: https://clipboard.<you>.workers.dev  (old URL hello-world.<you>.workers.dev also works)
         ▼
 Cloudflare Worker
    ├─ public/             website (index.html, style.css, script.js), served as static assets
@@ -48,6 +48,19 @@ The deploy flow:
 Push changes to the connected repository. Workers Builds rebuilds and redeploys automatically. Your password and saved text are kept.
 
 **Change the password:** go to **Worker → Settings → Variables and Secrets → `PASSWORD` → Edit**, then **Deploy**. Unlock again on each device afterwards.
+
+## Two Worker names, one storage
+
+The site is served by two Workers built from this folder:
+
+| Worker | URL | Role |
+|---|---|---|
+| `hello-world` | `hello-world.<you>.workers.dev` | Connected to Workers Builds. **Owns the Durable Object** that stores the clipboard and history (`wrangler.toml`). |
+| `clipboard` | `clipboard.<you>.workers.dev` | The preferred URL. Same code and website. Binds to `hello-world`'s storage with `script_name` (`wrangler.clipboard.toml`), so both URLs share the same data. |
+
+Durable Object storage belongs to the Worker that defines the class. Renaming the Worker, or deploying this config under a new name, would create a new, empty store. So `clipboard` borrows `hello-world`'s storage instead. **Don't delete `hello-world`**: it holds the data. Moving ownership to `clipboard` later is possible with a Durable Object transfer, a planned one-time migration.
+
+Every production build of `hello-world` deploys both Workers (`scripts/ci-deploy.sh`) and copies the `PASSWORD` build secret to both.
 
 ## Files
 
@@ -130,7 +143,7 @@ Text saved before history existed appears as the first history entry. No data is
 ## Testing the live site
 
 ```bash
-CLIPBOARD_PASSWORD=... node test/live-test.mjs https://hello-world.<you>.workers.dev
+CLIPBOARD_PASSWORD=... node test/live-test.mjs https://clipboard.<you>.workers.dev
 ```
 
 The test checks:

@@ -24,9 +24,11 @@ new_sqlite_classes = ["Clipboard"]
 [secrets]
 required = ["PASSWORD"]
 
-# If PASSWORD is stored as a *build* secret (Settings > Build > Variables and
-# secrets), copy it into the Worker's *runtime* secret during production deploys
-# on Cloudflare Workers Builds. The value is piped via stdin and never printed.
+# During production deploys on Cloudflare Workers Builds only:
+#  - copy the *build* secret PASSWORD (Settings > Build > Variables and secrets)
+#    into this Worker's *runtime* secret, and
+#  - deploy the "clipboard" Worker (wrangler.clipboard.toml), which serves the
+#    same site at clipboard.<subdomain>.workers.dev using THIS Worker's storage.
 # Does nothing locally, in preview builds, or when no build secret is set.
 [build]
-command = 'if [ "$WORKERS_CI" = "1" ] && [ "$WRANGLER_COMMAND" = "deploy" ] && [ -n "$PASSWORD" ]; then printf "%s" "$PASSWORD" | npx wrangler secret put PASSWORD; fi'
+command = "sh scripts/ci-deploy.sh"

@@ -1,0 +1,26 @@
+# Second Worker that serves the same site at https://clipboard.<subdomain>.workers.dev/
+#
+# Durable Object storage belongs to the Worker that defines the class
+# ("hello-world", see wrangler.toml). This Worker therefore defines NO
+# migrations of its own and binds to hello-world's existing namespace via
+# script_name, so both URLs read and write the same clipboard and history.
+# Deploying this config without script_name would create a new, empty store.
+#
+# Deployed automatically by scripts/ci-deploy.sh during hello-world's
+# production build on Cloudflare Workers Builds.
+name = "clipboard"
+main = "worker/worker.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[assets]
+directory = "public"
+
+[[durable_objects.bindings]]
+name = "CLIP"
+class_name = "Clipboard"
+script_name = "hello-world"
+
+# Supplied by scripts/ci-deploy.sh with --secrets-file; deploy fails without it.
+[secrets]
+required = ["PASSWORD"]
